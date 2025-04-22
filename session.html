@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudycardAI</title>
+  <script src="https://unpkg.com/i18next@23.4.6/i18next.min.js"></script>
+  <link rel="stylesheet" href="flashcards.css">
+  <header>
+   <div class="contact-info">
+	<p>Où nous contacter ?</p>
+    <span>📧 <a href="mailto:Studycardai@gmail.com">Studycardai@gmail.com</a></span>
+    <span>📞 +33 7 66 48 84 99</span>
+	<br>
+  </div>
+    <h1 data-i18n="title">🧠 Générateur de Flashcards IA</h1>
+	<button class="btn" onclick="goHome()">🏠 Home</button>
+    
+  </header>
+</head>
+<body>
+<script>
+window.goHome = function () {
+      localStorage.setItem("sessionLocked", "0");
+      window.location.href = "Index.html";
+    };
+let responseSubmitted = false;
+let scores = [];
+let flashcards = [], queue = [], currentIndex = 0, currentScore = 0, flipped = false, userResponses = [], mode = "autoeval";
+let btnCorrect, btnPartial, btnWrong, btnSubmit, btnSkip;
+let flashcardEl, summary, correctionButtons, evalButtons;
+let scoreDisplay, userAnswer, submitAnswer;
+
+document.addEventListener("DOMContentLoaded", () => {
+  mode = localStorage.getItem("mode") || "autoeval";
+  flashcards = queue = userResponses = [];
+  currentScore = currentIndex = 0;
+  flipped = false;
+
+
+  btnCorrect = document.querySelector(".btn-correct");
+  btnPartial = document.querySelector(".btn-partial");
+  btnWrong = document.querySelector(".btn-wrong");
+  btnSubmit = document.getElementById("btn-submit");
+  btnSkip = document.getElementById("btn-skip");
+  flashcardEl = document.getElementById("flashcard");
+  summary = document.getElementById("summary-text");
+  correctionButtons = document.getElementById("correction-buttons");
+  evalButtons = document.getElementById("eval-buttons");
+  scoreDisplay = document.getElementById("score");
+  userAnswer = document.getElementById("user-answer");
+  submitAnswer = document.getElementById("submit-answer");
+
+  const raw = localStorage.getItem("flashcardData") || "";
+  const lines = raw.split(/\r?\n/);
+  let question = "", answer = "";
+queue = []; // vide avant parsing propre
+
+lines.forEach(line => {
+  if (line.startsWith("Q:")) {
+    question = line.slice(2).trim();
+    answer = ""; // reset réponse
+  } else if ((line.startsWith("A:") || line.startsWith("R:")) && question) {
+    answer = line.slice(2).trim();
+    if (question && answer) {
+      queue.push({ front: question, back: answer });
+    } else {
+      console.warn("Carte ignorée (Q sans A ou A sans Q) :", { question, answer });
+    }
+    question = ""; // évite de réutiliser par erreur
+    answer = "";
+  }
+});
+
+
+  flashcards = [...queue];
+
+  document.querySelector(".action-buttons")?.style.setProperty("display", "block");
+  document.getElementById("flashcard-section").style.display = "block";
+  document.getElementById("session-summary").style.display = "none";
+
+  if (summary) {
+    summary.innerText = `✅ Session démarrée\n\n🃏 ${queue.length} cartes`;
+    summary.style.display = "block";
+  }
+  if (btnCorrect) {
+    btnCorrect.addEventListener("click", () => window.submitAutoEval("correct"));
+  }
+  if (btnPartial) {
+    btnPartial.addEventListener("click", () => window.submitAutoEval("partial"));
+  }
+  if (btnWrong) {
+    btnWrong.addEventListener("click", () => window.submitAutoEval("wrong"));
+  }
+  showNextFlashcard();
+});
+
+window.handleSubmit = function () {
+  const userText = userAnswer.value.trim();
+
+  userResponses[currentIndex] = userText;
+  responseSubmitted = true;
+
+  userAnswer.value = ""; // vide la zone de saisie
+
+  currentIndex++;
+  if (currentIndex < flashcards.length) {
+    showNextFlashcard();
+  } else {
+    showSummary(); // évaluation finale via API
+  }
+};
+async function evaluateResponsesWithAPI(questions, expectedAnswers, userAnswers) {
+  const proxyUrl = "http://localhost:3000/api/evaluate"; // ✅ proxy local vers ton serveur Node.js
+
+  try {
+    const response = await fetch(proxyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        questions: questions,
+        expected: expectedAnswers,
+        responses: userAnswers
+      }),
+    });
+
+    if (!response.ok) throw new Error("Erreur API");
+
+    const data = await response.json();
+    console.log("✅ Réponse brute de l'API :", data);
+
+    // ✅ Format attendu : { scores: [...] }
+    if (!Array.isArray(data.scores)) {
+      throw new Error("Format de scores invalide");
+    }
+
+    return { scores: data.scores };
+  } catch (error) {
+    console.error("❌ Erreur API :", error);
+    return { scores: Array(questions.length).fill(0) }; // fallback : 0 pour chaque réponse
+  }
+}
+
+
+
+
+window.showNextFlashcard = function () {
+  if (!flashcards.length) {
+    alert("❌ Aucune carte chargée. Vérifiez l'import.");
+    return;
+  }
+
+  if (currentIndex >= flashcards.length) {
+    showSummary();
+    return;
+  }
+
+  const card = flashcards[currentIndex];
+  flipped = false;
+  responseSubmitted = false;
+
+  if (flashcardEl) flashcardEl.innerText = card.front;
+
+  const skipBtn = document.getElementById("btn-skip");
+
+  if (mode === "autoeval") {
+    userAnswer.style.display = "none";
+    submitAnswer.style.display = "none";
+
+    // ✅ Afficher les boutons d’auto-évaluation
+    correctionButtons.style.display = "block";
+
+    // ❌ Cacher les autres
+    evalButtons.style.display = "none";
+
+    // ❌ Masquer le bouton "Passer"
+    if (skipBtn) skipBtn.style.display = "none";
+
+  } else if (mode === "eval") {
+    userAnswer.style.display = "block";
+    submitAnswer.style.display = "inline-block";
+
+    correctionButtons.style.display = "none";
+    evalButtons.style.display = "block";
+
+    if (skipBtn) skipBtn.style.display = "inline-block";
+  } else {
+    // fallback
+    correctionButtons.style.display = "none";
+    evalButtons.style.display = "none";
+    if (skipBtn) skipBtn.style.display = "inline-block";
+  }
+};
+
+
+
+
+window.submitAutoEval = function (type) {
+  if (type === "correct") {
+    scores[currentIndex] = 1;
+    currentScore += 1;
+  } else if (type === "partial") {
+    scores[currentIndex] = 0.5;
+    currentScore += 0.5;
+  } else if (type === "wrong") {
+    scores[currentIndex] = 0;
+    currentScore += 0;
+  }
+
+  userResponses[currentIndex] = "(Auto-évaluation)";
+  currentIndex++;
+
+  if (currentIndex < flashcards.length) {
+    showNextFlashcard();
+  } else {
+    showSummary();
+  }
+};
+
+function exportFlashcards() {
+  const lang = localStorage.getItem("lang") || "fr";
+  const dark = localStorage.getItem("dark") || "0";
+  const mode = localStorage.getItem("mode") || "autoeval";
+  const count = document.getElementById("cardCount")?.value || queue.length || "20";
+
+  const settingsLines = [
+    `# Lang: ${lang}`,
+    `# Dark: ${dark}`,
+    `# Mode: ${mode}`,
+    `# Card Count: ${count}`,
+    ``
+  ];
+
+  let invalidCount = 0;
+
+  const flashcardLines = queue.map((card, index) => {
+    const front = (card.front || "").toString().trim().replace(/\n/g, " ");
+    const back = (card.back || "").toString().trim().replace(/\n/g, " ");
+
+    if (front && back) {
+      return `Q: ${front}\nA: ${back}\n`;
+    } else {
+      console.warn(`⚠️ Carte invalide ignorée (index ${index})`, card);
+      invalidCount++;
+      return null;
+    }
+  }).filter(Boolean); // supprime les nulls
+
+  if (invalidCount > 0) {
+    console.warn(`⚠️ ${invalidCount} carte(s) invalide(s) ont été ignorées.`);
+  }
+
+  const content = [...settingsLines, ...flashcardLines].join("\n");
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "session.flashcards.txt";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+window.flipCard = function () {
+  if (!flashcardEl || !queue.length || !queue[currentIndex]) return;
+
+  if (mode === "eval" && !responseSubmitted) {
+    alert("❗ Vous devez soumettre votre réponse avant de voir la correction.");
+    return;
+  }
+
+  flipped = !flipped;
+  const card = queue[currentIndex];
+  flashcardEl.innerText = flipped ? card.back : card.front;
+};
+window.skipQuestion = function () {
+  userResponses[currentIndex] = "Pas de réponse";
+  // Score 0 → on ne modifie pas currentScore
+  currentIndex++;
+  showNextFlashcard();
+};
+function showSummary() {
+  flashcardEl.innerText = `Session terminée ✅\n\nAnalyse en cours...`;
+  correctionButtons?.style.setProperty("display", "none");
+  userAnswer.style.display = "none";
+  submitAnswer.style.display = "none";
+  evalButtons.style.display = "none";
+  document.getElementById("btn-skip").style.display = "none";
+
+  if (mode === "eval") {
+    const questions = flashcards.map(card => card.front);
+    const expectedAnswers = flashcards.map(card => card.back);
+    const responses = userResponses;
+
+    evaluateResponsesWithAPI(questions, expectedAnswers, responses)
+      .then(result => {
+        scores = result.scores;
+        currentScore = scores.reduce((a, b) => a + b, 0);
+        showRecap();
+      });
+  } else {
+    showRecap();
+  }
+    }
+
+
+
+
+function showRecap() {
+  if (!flashcardEl) {
+    console.error("❌ Élément flashcard introuvable.");
+    return;
+  }
+
+  const summaryCard = document.getElementById("session-summary");
+  const summaryText = document.getElementById("summary-text");
+
+  if (!summaryCard || !summaryText) {
+    console.error("❌ Éléments de résumé introuvables (#session-summary, #summary-text).");
+    return;
+  }
+
+  let recapText = "Récapitulatif de la session :\n\n";
+  let correctCount = 0;
+  let partialCount = 0;
+  let wrongCount = 0;
+
+  for (let i = 0; i < flashcards.length; i++) {
+    const question = flashcards[i].front;
+    const expected = flashcards[i].back;
+    const score = scores[i] ?? 0;
+    const userResponse = userResponses[i] || "Pas de réponse";
+
+    let note = "";
+    if (mode === "autoeval") {
+      if (score === 1) {
+        correctCount++;
+        note = "✅ Correct";
+      } else if (score === 0.5) {
+        partialCount++;
+        note = "🟡 Partiel";
+      } else {
+        wrongCount++;
+        note = "❌ Faux";
+      }
+    } else if (mode === "eval") {
+      note = `Score : ${score}`;
+    }
+
+     recapText += `Q${i + 1}: ${question}\n`;
+    if (mode == "eval") {
+      recapText += `Votre réponse : ${userResponse}\n`;
+    }
+    recapText += `Réponse correcte : ${expected}\n`;
+    recapText += `Évaluation : ${note}\n\n`;
+
+  }
+
+  // Résumé global
+  if (mode === "autoeval") {
+    recapText =
+      `Résumé des résultats :\n` +
+      `✅ Correctes : ${correctCount}\n` +
+      `🟡 Partielles : ${partialCount}\n` +
+      `❌ Fausses : ${wrongCount}\n\n` +
+      recapText;
+  }
+
+  const scorePercentage = (currentScore / scores.length) * 100;
+  flashcardEl.innerText = `✅ Session terminée\n\nScore : ${currentScore}/${scores.length} (${scorePercentage.toFixed(2)}%)`;
+  summaryText.innerText = recapText;
+  summaryCard.style.display = "block";
+
+  const topButtons = document.getElementById("top-summary-buttons");
+if (topButtons) {
+  topButtons.style.display = "block";
+}}
+
+
+</script>
+
+<!-- HTML -->
+<div id="top-summary-buttons" style="display: none; text-align: center; margin-top: 20px;">
+  <button class="btn" onclick="exportFlashcards()" style="margin-right: 10px;">
+    💾 Télécharger les flashcards
+  </button>
+</div>
+
+<div id="flashcard-section" style="display:none">
+  <div id="flashcard" class="card" onclick="flipCard()">Clique pour voir la réponse</div>
+</div>
+
+<div id="session-summary" class="card" style="display:none; white-space:pre-line;">
+  <div id="summary-text"></div>
+</div>
+
+
+
+
+<div id="correction-buttons" style="margin-top: 20px;">
+  <button id="btn"class="btn-correct">✅ Correct</button>
+  <button id="btn"class="btn-partial">🟡 Partiel</button>
+  <button id="btn" class="btn-wrong">❌ Faux</button>
+</div>
+
+<div id="eval-buttons" style="display:none; margin-top: 20px;">
+  <!-- Pour l'instant vide, mais requis -->
+</div>
+
+<div id="answer-section" style="margin-top: 20px;">
+  <textarea id="user-answer" class="styled-textarea" rows="4" cols="50" placeholder="Écrivez votre réponse ici"></textarea><br>
+  <button id="submit-answer" class="btn" onclick="handleSubmit()">Soumettre ma réponse</button>
+  <button id="btn-skip" class="btn" onclick="skipQuestion()">Passer</button>
+
+</div>
+
+</body>
+</html>

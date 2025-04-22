@@ -1,0 +1,219 @@
+   :root {
+      --bg: #f9f6f1;
+      --text: #2c2c2c;
+      --primary: #5a5a5a;
+      --hover: #333;
+      --card-bg: #ffffff;
+   }
+   body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+    }
+    body[dir="rtl"] {
+      direction: rtl;
+      text-align: right;
+    }
+    header {
+      background-color: var(--primary);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0 auto;
+    }
+   
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      background-color: var(--primary);
+      color: white;
+      transition: background 0.2s;
+      margin: 5px;
+	  align-items: center;
+    }
+    .btn:hover {
+      background-color: var(--hover);
+    }
+    .settings-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .settings-bar select,
+    .settings-bar input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    .action-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .flex-editor {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .edit-input {
+      width: 45%;
+      min-height: 160px;
+      padding: 10px;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      resize: none;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid #ccc;
+      padding: 50px;
+      margin: 20px auto;
+      width: 80%;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+  #answer-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px; /* espace entre les boutons */
+  margin-top: 20px;
+}
+/* Styles par défaut (desktop/tablette) */
+#flashcard {
+  width: 30%;
+  height: 200px;
+  margin: 20px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2em;
+  text-align: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+#session-text {
+  width: 30%;
+  height: 100px;
+  margin: 20px auto;
+  padding: 15px;
+  font-size: 1em;
+  overflow-y: auto;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Adaptation pour petits écrans (mobile) */
+@media (max-width: 768px) {
+  #flashcard {
+    width: 90%;
+    height: 200px;
+    font-size: 1em;
+  }
+
+  #session-text {
+    width: 90%;
+    height: 120px;
+    font-size: 0.95em;
+  }
+}
+.styled-textarea {
+  width: 100%;
+  max-width: 600px;
+  min-height: 120px;
+  padding: 12px;
+  font-size: 16px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  resize: none;
+  background-color: #f9f9f9;
+  transition: border-color 0.3s ease;
+  display: block; /* Assurez-vous que l'élément est un bloc */
+  margin: 0 auto; /* Centre l'élément horizontalement */
+  box-sizing: border-box; /* Inclut le padding et la bordure dans la largeur totale */
+}
+
+
+.styled-textarea:focus {
+  border-color: #007BFF;
+  outline: none;
+  background-color: #fff;
+}
+
+#auto-eval-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+ .contact-info {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9rem;
+    color: white;
+  }
+    .contact-info span {
+    margin-bottom: 2px;
+  }
+    @media (max-width: 600px) {
+    .contact-info {
+      font-size: 0.8rem;
+    }
+	
+	.btn-correct {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      background-color: var(--primary);
+      color: white;
+      transition: background 0.2s;
+      margin: 5px;
+	  align-items: center;
+    }
+	
+	.btn-partial {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      background-color: var(--primary);
+      color: white;
+      transition: background 0.2s;
+      margin: 5px;
+	  align-items: center;
+    }
+	
+	.btn-wrong {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      background-color: var(--primary);
+      color: white;
+      transition: background 0.2s;
+      margin: 5px;
+	  align-items: center;
+    }

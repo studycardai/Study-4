@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudycardAI</title>
+  <script src="https://unpkg.com/i18next@23.4.6/i18next.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/franc-min@5.0.0/build/franc-min.umd.js"></script>
+<link rel="stylesheet" href="flashcards.css">
+
+  <header>
+   <div class="contact-info">
+	<p>Où nous contacter ?</p>
+    <span>📧 <a href="mailto:Studycardai@gmail.com">Studycardai@gmail.com</a></span>
+    <span>📞 +33 7 66 48 84 99</span>
+	<br>
+  </div>
+    <h1 data-i18n="title">🧠 Générateur de Flashcards IA</h1>
+    
+  </header>
+  </head>
+  <body>
+  <script type="module">
+// ✅ Corrigé pour que les valeurs importées soient prises en compte AVANT chargement session.html
+window.handleFileUpload = handleFileUpload;
+window.generateFromInput = generateFromInput;
+
+window.addEventListener("DOMContentLoaded", () => {
+ const modeSelect = document.getElementById("modeSelect");
+    const savedMode = localStorage.getItem("mode") || "autoeval";
+    modeSelect.value = savedMode;
+
+    modeSelect.addEventListener("change", () => {
+      localStorage.setItem("mode", modeSelect.value);
+    });
+  const mode = localStorage.getItem("mode") || "autoeval";
+  const lang = localStorage.getItem("lang") || "fr";
+  const dark = localStorage.getItem("dark") || "0";
+
+  if (dark === "1") document.body.classList.add("dark-mode");
+  else document.body.classList.remove("dark-mode")
+
+  // LOCK SESSION CONFIG
+  if (localStorage.getItem("sessionLocked") === "1") {
+    document.querySelectorAll(
+      ".Textinput, .Manualinput, .settings-bar, .action-buttons, input[type='file'], #import-label, #btn-generate"
+    ).forEach((el) => el && (el.style.display = "none"));
+  }
+
+  if (document.getElementById("flashcard-section")?.style.display === "block") {
+    localStorage.setItem("sessionLocked", "1");
+  }
+});
+
+// ✅ Import de flashcards avec chargement complet des settings
+const importBtn = document.getElementById("importButton");
+const fileInput = document.getElementById("fileInput");
+
+importBtn?.addEventListener("click", () => fileInput?.click());
+
+fileInput?.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    const content = e.target.result;
+    if (!content.includes("Q:") || !content.includes("A:")) {
+      alert("Fichier invalide. Format Q:/A: attendu.");
+      return;
+    }
+
+    const lines = content.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("# Lang:")) localStorage.setItem("lang", line.split(":")[1].trim());
+      if (line.startsWith("# Dark:")) localStorage.setItem("dark", line.split(":")[1].trim());
+      if (line.startsWith("# Mode:")) localStorage.setItem("mode", line.split(":")[1].trim());
+      if (line.startsWith("# Card Count:")) {
+        const count = parseInt(line.split(":")[1].trim(), 10);
+        if (!isNaN(count)) {
+          const countEl = document.getElementById("cardCount");
+          if (countEl) countEl.value = count;
+        }
+      }
+    }
+
+    localStorage.setItem("flashcardData", content);
+
+    // 🔁 Recharger proprement les settings AVANT de lancer la session
+    window.location.reload(); // session.html le relira à froid avec les bons localStorage
+  };
+
+  reader.onerror = (err) => {
+    alert("Erreur lors de la lecture du fichier.");
+    console.error(err);
+  };
+
+  reader.readAsText(file);
+});
+
+  document.addEventListener("DOMContentLoaded", () => {
+  const sessionLocked = localStorage.getItem("sessionLocked");
+  if (sessionLocked === "1") {
+    document.querySelectorAll(".Textinput, .Manualinput, .settings-bar, .action-buttons, input[type='file'], #import-label, #btn-generate").forEach(el => {
+      if (el) el.style.display = "none";
+    });
+  }
+
+  // Lock config if flashcards session is launched
+  if (document.getElementById("flashcard-section")?.style.display === "block") {
+    localStorage.setItem("sessionLocked", "1");
+  }
+});
+
+  if (localStorage.getItem("dark") === "1") {
+    document.body.classList.add("dark");
+  };
+
+  import ReconnectingWebSocket from 'https://cdn.skypack.dev/reconnecting-websocket';
+
+  const options = {
+    maxRetries: 10,
+    reconnectInterval: 1000,
+    maxReconnectInterval: 30000,
+    reconnectDecay: 1.5,
+    timeoutInterval: 4000,
+    debug: true
+  };
+
+  const rws = new ReconnectingWebSocket('wss://ws.postman-echo.com/raw', [], options);
+
+  rws.addEventListener('open', () => {
+    console.log('✅ Connected to WebSocket');
+  });
+
+  rws.addEventListener('message', (event) => {
+    console.log('📩 Message:', event.data);
+  });
+
+  rws.addEventListener('close', () => {
+    console.log('❌ Disconnected from WebSocket');
+  });
+
+
+let importedTextContent = "";
+
+async function handleFileUpload(file) {
+  if (!file) return;
+
+
+  const fileType = file.type;
+  const fileName = file.name.toLowerCase();
+  const reader = new FileReader();
+
+  const detectLang = (text) => 'fr';
+
+  const extractKeywords = (text) => {
+    const words = text.toLowerCase().match(/\b[a-z\u00C0-\u017F]{5,}\b/g);
+    const freq = {};
+    words?.forEach(w => freq[w] = (freq[w] || 0) + 1);
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(e => `#${e[0]}`);
+  };
+
+  const detectSubject = (text) => {
+    if (/math|calcul|\u00E9quation|alg\u00E8bre/i.test(text)) return "Mathématiques";
+    if (/histoire|guerre|empire/i.test(text)) return "Histoire";
+    if (/droit|loi|justice/i.test(text)) return "Droit";
+    if (/bio|\u00E9cologie|espèce|climat/i.test(text)) return "Sciences";
+    return "Général";
+  };
+
+  const simplifySentences = (text) => {
+    return text.replace(/\b(sera[it]?|aura[it]?|serait|aurait|avait été|a été)\b/gi, "est")
+               .replace(/\b(par|par le|par la)\b/gi, "")
+               .replace(/\bété\b/gi, "est")
+               .replace(/\s+/g, " ");
+  };
+
+  const removeDuplicates = (text) => {
+    const seen = new Set();
+    return text.split(/\n{2,}/).filter(p => {
+      const clean = p.trim();
+      if (seen.has(clean)) return false;
+      seen.add(clean);
+      return true;
+    }).join("\n\n");
+  };
+
+  const suggestTitle = (text) => {
+    const match = text.match(/^[#\s]*([A-Z][\w\s,:-]{10,100})/m);
+    return match ? match[1].trim() : "Session sans titre";
+  };
+
+  const finish = (text = "") => {
+    if (!text) return;
+
+    const detectedLang = detectLang(text);
+    const simplified = simplifySentences(text);
+    const deduped = removeDuplicates(simplified);
+    const tags = extractKeywords(deduped);
+    const subject = detectSubject(deduped);
+    const title = suggestTitle(deduped);
+
+    importedTextContent = deduped;
+
+    localStorage.setItem("lastImportedText", deduped);
+    localStorage.setItem("lastSubject", subject);
+    localStorage.setItem("lastKeywords", JSON.stringify(tags));
+    localStorage.setItem("lastTitle", title);
+    localStorage.setItem("lastLang", detectedLang);
+    document.title = title;
+
+    const textArea = document.getElementById("textInput");
+    if (textArea) textArea.value = deduped;
+  };
+
+  reader.onerror = () => {
+    loading.style.display = "none";
+    alert("Erreur lors de la lecture du fichier.");
+  };
+
+  if (fileType === "text/plain") {
+    reader.onload = e => finish(e.target.result || "");
+    reader.readAsText(file);
+  } else if (fileType === "application/pdf") {
+    reader.onload = async e => {
+      try {
+        const pdfData = new Uint8Array(e.target.result);
+        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        let text = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map(item => item.str).join(" ") + "\n";
+        }
+        finish(text.trim());
+      } catch (err) {
+        loading.style.display = "none";
+        alert("❌ Erreur lecture PDF : " + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else if (fileName.endsWith(".docx")) {
+    reader.onload = async e => {
+      const buffer = e.target.result;
+      try {
+        const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+        if (!result?.value?.trim()) throw new Error("Mammoth vide");
+        finish(result.value.replace(/<[^>]+>/g, "").trim());
+      } catch (mammothError) {
+        try {
+          const zip = await JSZip.loadAsync(buffer);
+          const docXml = await zip.file("word/document.xml").async("string");
+          const xmlDoc = new DOMParser().parseFromString(docXml, "text/xml");
+          const textNodes = xmlDoc.getElementsByTagName("w:t");
+          const text = Array.from(textNodes).map(t => t.textContent.trim()).join(" ");
+          finish(text);
+        } catch (fallbackError) {
+          console.warn("❌ DOCX fallback error:", fallbackError.message);
+          const flashcard = document.getElementById("flashcard");
+          if (flashcard) flashcard.innerText = "❌ Erreur DOCX : " + fallbackError.message;
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    loading.style.display = "none";
+    alert("❌ Format de fichier non pris en charge.");
+  }
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+async function generateFromInput() {
+  const rawText = document.getElementById("textInput").value.trim();
+  const manualText = document.getElementById("manualInput").value.trim();
+  const countEl = document.getElementById("cardCount");
+  const userVal = parseInt(countEl.value, 10);
+
+  if (!rawText && !manualText) {
+    alert("Veuillez entrer un texte ou importer un fichier.");
+    return;
+  }
+
+  if (isNaN(userVal) || userVal < 5 || userVal > 1000) {
+    alert("Nombre de cartes invalide.");
+    return;
+  }
+
+  try {
+    let flashcardData = "";
+
+    const isQAPattern = (manualText.includes("Q:") && (manualText.includes("A:") || manualText.includes("R:")));
+    const isSimplePair = manualText.includes(" - ");
+
+    if (manualText && (isQAPattern || isSimplePair)) {
+      if (isQAPattern) {
+        flashcardData = manualText;
+        console.log("⚙️ Format Q:/A: détecté.");
+      } else {
+        const lines = manualText.split(/\r?\n/).filter(Boolean);
+        const converted = lines.map(line => {
+          const parts = line.split(" - ");
+          if (parts.length === 2) {
+            const q = parts[0].trim();
+            const a = parts[1].trim();
+            return `Q: ${q}\nA: ${a}\n`;
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (converted.length === 0) {
+          alert("⚠️ Aucune paire valide dans le format manuel.");
+          return;
+        }
+
+        flashcardData = converted.join("\n");
+        console.log("⚙️ Format 'mot - réponse' converti.");
+      }
+    } else {
+      // ✅ Appel API avec le texte brut
+      const fullText = rawText;
+      const response = await fetch("http://localhost:3000/flashcards", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          content: fullText,
+          limit: userVal
+        })
+      });
+
+      flashcardData = await response.text();
+
+      if (!flashcardData.includes("Q:") || !flashcardData.includes("R:")) {
+        alert("Réponse invalide. Format Q:/R: attendu.");
+        return;
+      }
+    }
+
+    // ✅ Stocke les données
+    localStorage.setItem("flashcardData", flashcardData);
+
+    // ▶️ Lance la session
+    window.location.href = "session.html";
+  } catch (err) {
+    alert("Erreur de génération : " + err.message);
+    console.error(err);
+  }
+}
+
+
+
+
+function exportFlashcards() {
+  const settingsLines = [
+    `# Lang: ${localStorage.getItem("lang") || "fr"}`,
+    `# Dark: ${localStorage.getItem("dark") || "0"}`,
+    `# Mode: ${localStorage.getItem("mode") || "autoeval"}`,
+    `# Card Count: ${document.getElementById("cardCount")?.value || "20"}`,
+    ``
+  ];
+
+  const flashcardLines = queue.map(card =>
+    `Q: ${card.front}\nA: ${card.back}\n`
+  );
+
+  const content = [...settingsLines, ...flashcardLines].join("\n");
+
+  const blob = new Blob([content], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "session.flashcards.txt";
+  link.click();
+}
+
+document.getElementById("fileInput").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    if (!content.includes("Q:") || !content.includes("A:")) {
+      alert("Fichier invalide. Format Q:/A: attendu.");
+      return;
+    }
+
+    // Lire et stocker les options depuis les lignes `#`
+    const lines = content.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("# Lang:")) {
+        localStorage.setItem("lang", line.split(":")[1].trim());
+      }
+      if (line.startsWith("# Dark:")) {
+        localStorage.setItem("dark", line.split(":")[1].trim());
+      }
+      if (line.startsWith("# Mode:")) {
+        localStorage.setItem("mode", line.split(":")[1].trim());
+      }
+      if (line.startsWith("# Card Count:")) {
+        const count = parseInt(line.split(":")[1].trim(), 10);
+        if (!isNaN(count)) {
+          const countEl = document.getElementById("cardCount");
+          if (countEl) countEl.value = count;
+        }
+      }
+    }
+
+    localStorage.setItem("flashcardData", content);
+    window.location.href = "session.html";
+  };
+
+  reader.onerror = (err) => {
+    alert("Erreur lors de la lecture du fichier.");
+    console.error(err);
+  };
+
+  reader.readAsText(file);
+});
+
+
+function handleFile(file) {
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    importedTextContent = e.target.result || "";
+    alert("📎 Fichier chargé avec succès. Cliquez sur 'Générer' pour créer les flashcards.");
+  };
+  reader.readAsText(file);
+}
+
+function isTextFile(file) {
+  return file.type.startsWith('text/') || file.type === 'application/json';
+}
+</script>
+	<p>Création avec IA</p>
+    <div class="Textinput">
+      <textarea id="textInput" class="edit-input" data-i18n-placeholder="pasteText" placeholder="Collez un texte ou une instruction IA"></textarea>
+    </div>
+	
+	<p id="import-label" data-i18n="import"></p>
+    <input type="file" accept=".txt,.docx,.pdf" onchange="handleFileUpload(this.files[0])" />
+
+<pre id="output"></pre>
+<button id="importButton" >Importer des flashcards</button>
+<input type="file" id="fileInput" accept=".txt,.flashcards.txt" style="display:none" />
+
+
+	<br>
+	
+	<p>Création manuelle</p>
+	<div class="Manualinput">
+     <textarea id="manualInput" class="edit-input" data-i18n-placeholder="questionAnswer" placeholder="Question - Réponse"></textarea>
+    </div>
+	<br>
+	<div class="container">
+    <div class="settings-bar">
+	<data-i18n="labelFlashcards">Nombre de flashcards (5-150):</p>
+     <input type="number" id="cardCount" value="20" min="5" max="150" placeholder="5 à 150" />
+      <p data-i18n="labelFlashcards">flashcards</p>
+    </div>
+	<div>
+  <select id="modeSelect" class="btn">
+    <option value="autoeval">📝 Mode Exercice (autoévaluation)</option>
+    <option value="eval">🎯 Mode Évaluation (notation automatique)</option>
+  </select>
+</div>
+	</div>
+
+    <div class="action-buttons">
+      <button class="btn" id="btn-generate" onclick="generateFromInput()" data-i18n="generate">🪄 Générer</button>
+</label>
+</div>
+
+</body>
+</html>
